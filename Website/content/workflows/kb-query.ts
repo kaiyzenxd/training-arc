@@ -105,6 +105,7 @@ export const kbQuery: Workflow = {
   video: "https://www.loom.com/share/7afc3429f1c24fefa8299eb568494546",
   download: "/workflows/kb-query.workflow.json",
   related: ["kb-ingestion"],
+  raw,
   nodes: board.nodes,
   edges: board.edges,
   prose: {

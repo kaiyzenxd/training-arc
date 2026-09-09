@@ -3,6 +3,7 @@ import type { Workflow, RunState } from "@/lib/workflows";
 import { STATE_LABEL } from "@/lib/workflows";
 import { layoutBoard, type PlacedNode } from "@/lib/board-layout";
 import { BoardReveal } from "@/components/board-reveal";
+import { BoardViewport } from "@/components/board-viewport";
 import { NodeIcon, ICON_BY_KIND } from "@/components/node-icon";
 
 type Variant = "hero" | "full" | "compact";
@@ -161,6 +162,18 @@ function Package({
           style={{ "--seg": n.col } as React.CSSProperties}
         />
       )}
+      {n.needsCred && nameBelow && (
+        <circle
+          cx={n.x + n.w - 7}
+          cy={n.y + 7}
+          r={2.6}
+          fill="none"
+          stroke="var(--color-silk-faint)"
+          strokeWidth={1.2}
+        >
+          <title>Needs a credential — stripped on publish</title>
+        </circle>
+      )}
       {n.kind === "agent" && (
         <circle cx={n.x + 9} cy={n.y + 9} r={2.4} fill="var(--color-silk-soft)" />
       )}
@@ -242,7 +255,7 @@ function BoardSvg({
         {
           "--sig-step": `${sigStep}ms`,
           "--sig-loop": `${sigLoop}ms`,
-          ...(importedWide ? { width: `${Math.round(L.width * 0.82)}px` } : {}),
+          ...(importedWide ? { width: `${Math.round(L.width)}px` } : {}),
         } as React.CSSProperties
       }
       aria-label={`${workflow.title}: ${workflow.nodes
@@ -436,20 +449,26 @@ export function Board({
   reveal?: boolean;
 }) {
   const withNotes = variant === "hero" || variant === "full";
+  const useViewport = workflow.layout === "n8n" && variant === "full";
+  const svg = (
+    <BoardSvg
+      workflow={workflow}
+      variant={variant}
+      animate={animate}
+      signal={reveal}
+    />
+  );
   const inner = (
     <div className={`board on-board board-${variant} ${animate ? "deploy" : ""}`}>
       <div className="board-header">
         <TitleBlock workflow={workflow} variant={variant} featured={featured} />
         {withNotes && <NotesBlock workflow={workflow} />}
       </div>
-      <div className="board-scroll">
-        <BoardSvg
-          workflow={workflow}
-          variant={variant}
-          animate={animate}
-          signal={reveal}
-        />
-      </div>
+      {useViewport ? (
+        <BoardViewport>{svg}</BoardViewport>
+      ) : (
+        <div className="board-scroll">{svg}</div>
+      )}
       {variant !== "compact" ? (
         <Legend status={workflow.status} />
       ) : (

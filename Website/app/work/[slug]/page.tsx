@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Board } from "@/components/board";
+import { BoardPanel } from "@/components/board-panel";
 import { Chevron } from "@/components/icon";
 import { DemoVideo } from "@/components/demo-video";
 import { workflows, getWorkflow } from "@/lib/workflows";
@@ -43,21 +44,21 @@ export default async function CaseStudy({ params }: PageProps<"/work/[slug]">) {
 
       <p className="case-summary prose-measure">{workflow.summary}</p>
 
-      <Board workflow={workflow} variant="full" animate reveal />
+      {workflow.raw ? (
+        <BoardPanel
+          board={<Board workflow={workflow} variant="full" animate reveal />}
+          json={JSON.stringify(workflow.raw, null, 2)}
+          download={workflow.download}
+        />
+      ) : (
+        <Board workflow={workflow} variant="full" animate reveal />
+      )}
 
-      {(workflow.download || workflow.layout === "n8n" || related.length > 0) && (
+      {(workflow.layout === "n8n" || related.length > 0) && (
         <p className="case-meta legend">
           {workflow.synthetic
             ? "Illustrative sample — not a client build."
-            : "Drawn from the real n8n workflow."}
-          {workflow.download && (
-            <>
-              {" · "}
-              <a href={workflow.download} download className="case-dl">
-                Download the workflow (sanitised .json)
-              </a>
-            </>
-          )}
+            : "The real n8n workflow, credentials stripped — a ring on a node means it needs one."}
           {related.map((r) => (
             <span key={r.slug}>
               {" · "}Pairs with{" "}

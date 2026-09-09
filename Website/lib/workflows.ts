@@ -25,6 +25,8 @@ export interface BoardNode {
   pos?: [number, number];
   /** silkscreen glyph name (see components/node-icon) */
   icon?: string;
+  /** the node carried a credential in the export (stripped on publish) */
+  needsCred?: boolean;
 }
 
 export interface BoardEdge {
@@ -74,6 +76,8 @@ export interface Workflow {
   download?: string;
   /** slugs of related workflows */
   related?: string[];
+  /** the raw (sanitised) workflow export, for the JSON view */
+  raw?: unknown;
   nodes: BoardNode[];
   edges: BoardEdge[];
   prose: Prose;

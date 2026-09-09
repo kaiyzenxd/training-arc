@@ -78,6 +78,10 @@ const GLYPHS: Record<string, Glyph> = {
     ],
     c: [[9.5, 9.5, 0.6]],
   },
+  key: {
+    c: [[8, 15, 4.5]],
+    d: ["M11 12 L20 3 M16 3 h4 v4 M16.5 6.5 l2 2"],
+  },
 };
 
 export function iconForType(n8nType: string): string {

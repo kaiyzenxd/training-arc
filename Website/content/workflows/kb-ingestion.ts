@@ -101,6 +101,7 @@ export const kbIngestion: Workflow = {
   layout: "n8n",
   download: "/workflows/kb-ingestion.workflow.json",
   related: ["kb-query"],
+  raw,
   nodes: board.nodes,
   edges: board.edges,
   prose: {

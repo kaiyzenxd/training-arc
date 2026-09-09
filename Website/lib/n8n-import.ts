@@ -14,6 +14,7 @@ interface RawNode {
   type: string;
   position: [number, number];
   parameters?: Record<string, unknown>;
+  credentials?: Record<string, unknown>;
 }
 
 export interface RawWorkflow {
@@ -82,6 +83,11 @@ export function fromN8n(
       counters[kind] = (counters[kind] ?? 0) + 1;
       ref = `${REF_PREFIX[kind]}${counters[kind]}`;
     }
+    const needsCred =
+      !!(n.credentials && Object.keys(n.credentials).length) ||
+      /"authentication"\s*:\s*"(generic|predefined)CredentialType"/.test(
+        JSON.stringify(n.parameters ?? {}),
+      );
     return {
       id: n.name,
       ref,
@@ -90,6 +96,7 @@ export function fromN8n(
       label2: ov.detail,
       pos: [n.position[0], n.position[1]],
       icon: iconForType(n.type) || ICON_BY_KIND[kind],
+      needsCred,
     };
   });
 
