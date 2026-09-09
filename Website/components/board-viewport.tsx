@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -10,13 +11,16 @@ import {
 
 type View = { s: number; x: number; y: number };
 
-/** Pan (drag) + zoom (buttons) around a wide board SVG. */
+const MIN_FACTOR = 0.9; // allow zooming a little past "fit"
+const MAX_SCALE = 2.8;
+
+/** Pan (drag) + zoom (wheel / buttons) around a wide board SVG. */
 export function BoardViewport({ children }: { children: ReactNode }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>({ s: 1, x: 0, y: 0 });
-  const [fitS, setFitS] = useState(0.3);
   const [vh, setVh] = useState<number | undefined>(undefined);
+  const fitSRef = useRef(0.3);
   const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(
     null,
   );
@@ -34,7 +38,7 @@ export function BoardViewport({ children }: { children: ReactNode }) {
     if (!wrap || !nat) return;
     const s = Math.min(1, (wrap.clientWidth - 32) / nat.w);
     const h = Math.max(280, Math.min(560, nat.h * s + 36));
-    setFitS(s);
+    fitSRef.current = s;
     setVh(h);
     setView({
       s,
@@ -45,31 +49,55 @@ export function BoardViewport({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     doFit();
-    // re-fit if fonts/layout settle late
     const id = setTimeout(doFit, 250);
     return () => clearTimeout(id);
   }, [doFit]);
 
-  const zoom = (factor: number) => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
+  /** zoom by `factor`, keeping the point (px,py) in the wrap fixed */
+  const zoomAt = useCallback((factor: number, px: number, py: number) => {
     setView((v) => {
-      const s = Math.min(2.6, Math.max(fitS * 0.9, v.s * factor));
-      const cx = wrap.clientWidth / 2;
-      const cy = wrap.clientHeight / 2;
-      // keep the viewport centre fixed
+      const s = Math.min(
+        MAX_SCALE,
+        Math.max(fitSRef.current * MIN_FACTOR, v.s * factor),
+      );
+      if (s === v.s) return v;
       return {
         s,
-        x: cx - ((cx - v.x) / v.s) * s,
-        y: cy - ((cy - v.y) / v.s) * s,
+        x: px - ((px - v.x) / v.s) * s,
+        y: py - ((py - v.y) / v.s) * s,
       };
     });
+  }, []);
+
+  const zoomCentre = (factor: number) => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    zoomAt(factor, wrap.clientWidth / 2, wrap.clientHeight / 2);
   };
+
+  // wheel zoom — needs a non-passive listener to preventDefault the page scroll
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = wrap.getBoundingClientRect();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      zoomAt(factor, e.clientX - r.left, e.clientY - r.top);
+    };
+    wrap.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrap.removeEventListener("wheel", onWheel);
+  }, [zoomAt]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button, a")) return;
-    drag.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const { clientX, clientY, pointerId } = e;
+    const el = e.currentTarget as HTMLElement;
+    setView((v) => {
+      drag.current = { px: clientX, py: clientY, x: v.x, y: v.y };
+      return v;
+    });
+    el.setPointerCapture(pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current;
@@ -104,19 +132,29 @@ export function BoardViewport({ children }: { children: ReactNode }) {
       >
         {children}
       </div>
-      <div className="board-viewport-ctl legend">
-        <button type="button" onClick={() => zoom(1.4)} aria-label="Zoom in">
-          +
+      <div className="board-viewport-ctl">
+        <button type="button" onClick={() => zoomCentre(1.4)} aria-label="Zoom in">
+          <svg viewBox="0 0 16 16" aria-hidden>
+            <path d="M8 3.5v9M3.5 8h9" />
+          </svg>
         </button>
-        <button type="button" onClick={() => zoom(1 / 1.4)} aria-label="Zoom out">
-          &minus;
+        <button
+          type="button"
+          onClick={() => zoomCentre(1 / 1.4)}
+          aria-label="Zoom out"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden>
+            <path d="M3.5 8h9" />
+          </svg>
         </button>
         <button type="button" onClick={doFit} aria-label="Fit to view">
-          Fit
+          <svg viewBox="0 0 16 16" aria-hidden>
+            <path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3" />
+          </svg>
         </button>
       </div>
       <p className="board-viewport-hint legend" aria-hidden>
-        drag to pan
+        scroll to zoom · drag to pan
       </p>
     </div>
   );
