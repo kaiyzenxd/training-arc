@@ -32,3 +32,9 @@ Thumbs.db
 
 # --- n8n local data (if you ever copy it in) ---
 .n8n/
+
+# --- impeccable: local-only / regenerable ---
+.impeccable/config.local.json
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/build/
