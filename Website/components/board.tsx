@@ -372,9 +372,10 @@ function TitleBlock({
     <div className="title-block">
       {featured && <span className="tb-flag">Featured</span>}
       {hero ? (
-        <Link href={`/work/${workflow.slug}`} className="tb-name tb-name--link stamp">
-          {workflow.title}
-        </Link>
+        // the whole hero board is already one <Link> (see Board()) — a nested
+        // <a> here would be invalid HTML, so this is styled like the link
+        // but isn't one itself.
+        <div className="tb-name tb-name--link stamp">{workflow.title}</div>
       ) : (
         <div className="tb-name stamp">{workflow.title}</div>
       )}
@@ -404,11 +405,7 @@ function TitleBlock({
         </p>
       )}
 
-      {hero && (
-        <Link href={`/work/${workflow.slug}`} className="pad-button">
-          Open the case study
-        </Link>
-      )}
+      {hero && <span className="pad-button">Open the case study</span>}
       {variant === "full" && (
         <a
           href="mailto:markryanbaricuatro@gmail.com?subject=Start%20a%20project"
@@ -477,16 +474,18 @@ export function Board({
     </div>
   );
 
-  if (variant === "compact") {
+  const revealed = reveal ? <BoardReveal>{inner}</BoardReveal> : inner;
+
+  if (variant === "compact" || variant === "hero") {
     return (
       <Link
         href={`/work/${workflow.slug}`}
         className="board-link"
         aria-label={`Open case study: ${workflow.title}`}
       >
-        {inner}
+        {variant === "hero" ? revealed : inner}
       </Link>
     );
   }
-  return reveal ? <BoardReveal>{inner}</BoardReveal> : inner;
+  return revealed;
 }

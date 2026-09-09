@@ -380,7 +380,8 @@ a {
   text-decoration-thickness: 2px;
   transition: text-decoration-color 150ms ease;
 }
-.tb-name--link:hover {
+.tb-name--link:hover,
+.board-link:hover .tb-name--link {
   text-decoration-color: var(--color-silk-soft);
 }
 .board-compact .tb-name {
@@ -468,7 +469,8 @@ a {
   border-right: 1.5px solid currentColor;
   transform: rotate(45deg);
 }
-.pad-button:hover {
+.pad-button:hover,
+.board-link:hover .pad-button {
   background: var(--color-silk);
   color: var(--color-board);
   transform: translateY(-1px);
