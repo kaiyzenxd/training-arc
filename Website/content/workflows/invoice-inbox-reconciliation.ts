@@ -19,7 +19,7 @@ export const invoiceInboxReconciliation: Workflow = {
     { id: "conf", ref: "U3", kind: "logic", label: "Confident enough?" },
     { id: "post", ref: "A1", kind: "tool", label: "Post a draft bill", lane: -1 },
     { id: "review", ref: "A2", kind: "tool", label: "Send to a human queue", lane: 1 },
-    { id: "out", ref: "P1", kind: "outcome", label: "Books stay current" },
+    { id: "out", ref: "P1", kind: "outcome", label: "Draft bill, ready to approve" },
   ],
   edges: [
     { from: "trig", to: "dedupe" },
@@ -50,7 +50,7 @@ export const invoiceInboxReconciliation: Workflow = {
       },
       {
         note:
-          "The confidence gate fails toward review, not toward posting. A false 'needs a look' costs a few seconds; a false 'all good' costs a wrong payment.",
+          "The confidence gate fails toward review, not toward posting. A false 'needs a look' is cheap to clear; a false 'all good' is a wrong payment.",
         ref: "U3",
       },
       {
@@ -60,8 +60,8 @@ export const invoiceInboxReconciliation: Workflow = {
       },
     ],
     result: [
-      "Invoices are read and matched as they arrive, so the month-end pile is already reconciled.",
-      "The review queue is small and specific — it tells the AP clerk what to check, not just that something is wrong.",
+      "Each invoice is read and matched to a purchase order as it arrives, so reconciliation happens continuously instead of in a month-end batch.",
+      "Clean matches become draft bills for one-click approval; anything uncertain lands in a review queue that names the specific mismatch, not just that something is wrong.",
     ],
   },
 };

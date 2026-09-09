@@ -265,12 +265,15 @@ function NotesBlock({ workflow }: { workflow: Workflow }) {
 function TitleBlock({
   workflow,
   variant,
+  featured,
 }: {
   workflow: Workflow;
   variant: Variant;
+  featured: boolean;
 }) {
   return (
     <div className="title-block">
+      {featured && <span className="tb-flag">Featured</span>}
       <div className="tb-name stamp">{workflow.title}</div>
       <dl className="tb-fields">
         <div>
@@ -328,16 +331,18 @@ export function Board({
   workflow,
   variant = "hero",
   animate = false,
+  featured = false,
 }: {
   workflow: Workflow;
   variant?: Variant;
   animate?: boolean;
+  featured?: boolean;
 }) {
   const withNotes = variant === "hero" || variant === "full";
   const inner = (
     <div className={`board on-board board-${variant} ${animate ? "deploy" : ""}`}>
       <div className="board-header">
-        <TitleBlock workflow={workflow} variant={variant} />
+        <TitleBlock workflow={workflow} variant={variant} featured={featured} />
         {withNotes && <NotesBlock workflow={workflow} />}
       </div>
       <div className="board-scroll">

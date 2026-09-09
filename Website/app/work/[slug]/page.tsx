@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Board } from "@/components/board";
+import { Chevron } from "@/components/icon";
 import { workflows, getWorkflow } from "@/lib/workflows";
 
 export function generateStaticParams() {
@@ -31,8 +32,9 @@ export default async function CaseStudy({ params }: PageProps<"/work/[slug]">) {
 
   return (
     <article className="page case">
-      <Link href="/work" className="back-link legend">
-        &larr; All workflows
+      <Link href="/work" className="back-link legend inline-icon-link">
+        <Chevron dir="left" />
+        All workflows
       </Link>
 
       <p className="case-summary prose-measure">{workflow.summary}</p>
@@ -81,12 +83,18 @@ export default async function CaseStudy({ params }: PageProps<"/work/[slug]">) {
 
       <nav className="case-nav legend" aria-label="More workflows">
         {prev ? (
-          <Link href={`/work/${prev.slug}`}>&larr; {prev.title}</Link>
+          <Link href={`/work/${prev.slug}`} className="inline-icon-link">
+            <Chevron dir="left" />
+            {prev.title}
+          </Link>
         ) : (
           <span />
         )}
         {next ? (
-          <Link href={`/work/${next.slug}`}>{next.title} &rarr;</Link>
+          <Link href={`/work/${next.slug}`} className="inline-icon-link">
+            {next.title}
+            <Chevron dir="right" />
+          </Link>
         ) : (
           <span />
         )}

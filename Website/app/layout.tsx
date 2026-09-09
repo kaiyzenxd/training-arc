@@ -3,6 +3,7 @@ import { Archivo, Martian_Mono } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
 import { Footer } from "@/components/footer";
+import { DrawingFrame, SheetStamp } from "@/components/sheet-frame";
 
 const archivo = Archivo({
   variable: "--font-archivo",
@@ -44,8 +45,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${archivo.variable} ${martianMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        <DrawingFrame />
         <Nav />
         <main className="flex-1">{children}</main>
+        <SheetStamp />
         <Footer />
       </body>
     </html>

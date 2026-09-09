@@ -19,7 +19,7 @@ export const inboundLeadTriage: Workflow = {
     { id: "book", ref: "A1", kind: "tool", label: "Offer times & book", lane: -1 },
     { id: "draft", ref: "A2", kind: "tool", label: "Draft a reply for a human", lane: 1 },
     { id: "crm", ref: "U3", kind: "tool", label: "Write to the CRM" },
-    { id: "out", ref: "P1", kind: "outcome", label: "Routed in under a minute" },
+    { id: "out", ref: "P1", kind: "outcome", label: "Owner gets it, ready to send" },
   ],
   edges: [
     { from: "trig", to: "enrich" },
@@ -60,8 +60,8 @@ export const inboundLeadTriage: Workflow = {
       },
     ],
     result: [
-      "Enquiries are read, qualified, and routed within about a minute of arriving, at any hour.",
-      "Owners get a lead with the context already gathered and a first-draft reply written, so their job is to check and send rather than start from a blank page.",
+      "Every enquiry is enriched, classified, and routed the moment it arrives — no shared-inbox wait, and the same fit-and-intent criteria applied to all of them.",
+      "The owner receives the lead with the context already gathered, the agent's rationale attached, and a first-draft reply written — so the job is to check and send, not start from a blank page.",
     ],
   },
 };

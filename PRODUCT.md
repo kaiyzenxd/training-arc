@@ -8,10 +8,13 @@ web
 
 ## Stack
 
-User-decided: **Next.js (App Router) + TypeScript + Tailwind CSS + MDX**, deployed on
+User-decided: **Next.js (App Router) + TypeScript + Tailwind CSS**, deployed on
 **Vercel**. Repo is a monorepo (`Training Arc/`); the site lives in `Website/` and
 Vercel's Root Directory is set to `Website`. Auto-deploys on push to `main`.
-Case-study content is authored as MDX files, one per workflow.
+Case-study content is authored as **typed TypeScript modules** (`content/workflows/*.ts`),
+one per workflow — the board is drawn from structured `nodes`/`edges`, the write-up
+from a typed `prose` object. (MDX was considered and dropped: typed data is less
+breakable and the board needs structured data regardless.)
 
 ## Users
 

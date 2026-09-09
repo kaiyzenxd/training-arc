@@ -16,7 +16,8 @@
   /* ink on the mat */
   --color-ink: #23271f;
   --color-ink-soft: #5b6157;
-  --color-ink-faint: #878d80;
+  --color-ink-faint: #626759; /* AA on the mat ground (~4.7:1) */
+  --color-ink-line: #9aa093; /* borders / rules only, never text */
 
   /* the board: deep matte indigo solder mask */
   --color-board: #173653;
@@ -43,7 +44,8 @@
 
   --shadow-board: 0 18px 40px -18px rgba(15, 39, 64, 0.45);
   --shadow-board-sm: 0 10px 24px -14px rgba(15, 39, 64, 0.4);
-  --shadow-pad: 0 2px 0 0 rgba(15, 39, 64, 0.25);
+  --shadow-pad: 0 3px 9px -2px rgba(15, 39, 64, 0.32);
+  --shadow-pad-dark: 0 3px 9px -3px rgba(35, 39, 31, 0.24);
 }
 
 /* ------------------------------------------------------------------ *
@@ -62,6 +64,10 @@ html,
 body {
   overflow-x: clip;
   max-width: 100%;
+}
+
+body {
+  position: relative;
 }
 
 html {
@@ -279,6 +285,7 @@ a {
 }
 
 .title-block {
+  position: relative;
   flex: 1 1 20rem;
   display: flex;
   flex-direction: column;
@@ -286,6 +293,19 @@ a {
   padding: clamp(14px, 2.4vw, 20px);
   border: 1px solid var(--color-silk-faint);
   border-radius: 3px;
+}
+
+.tb-flag {
+  display: inline-block;
+  margin-bottom: 11px;
+  padding: 3px 9px;
+  background: var(--color-silk);
+  color: var(--color-board);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.5625rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
 }
 
 .notes-block {
@@ -577,8 +597,8 @@ a {
 }
 
 .site-footer {
-  margin-top: clamp(60px, 10vw, 120px);
-  padding: 40px clamp(20px, 5vw, 64px);
+  margin-top: clamp(28px, 4vw, 48px);
+  padding: 36px clamp(20px, 5vw, 64px);
   border-top: 1px solid var(--color-mat-line);
   background: var(--color-mat-raised);
 }
@@ -623,7 +643,7 @@ a {
 .page {
   max-width: 1280px;
   margin: 0 auto;
-  padding: clamp(36px, 7vw, 84px) clamp(20px, 5vw, 64px) 0;
+  padding: clamp(28px, 4.5vw, 60px) clamp(20px, 5vw, 64px) 0;
 }
 
 .intro {
@@ -639,6 +659,25 @@ a {
   margin-top: 20px;
   font-size: clamp(0.95rem, 1.6vw, 1.125rem);
   line-height: 1.6;
+  color: var(--color-ink-soft);
+}
+
+/* home: a tight functional lede, so the featured board leads the viewport */
+.lede {
+  max-width: 46rem;
+  margin-bottom: clamp(22px, 3.5vw, 34px);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.05rem, 1.9vw, 1.4rem);
+  line-height: 1.4;
+  text-wrap: pretty;
+  color: var(--color-ink);
+}
+.lede b {
+  font-weight: 800;
+  font-variation-settings: "wght" 800, "wdth" 115;
+}
+.lede span {
   color: var(--color-ink-soft);
 }
 
@@ -706,7 +745,7 @@ a {
   margin-top: 22px;
   color: var(--color-ink);
   border-color: var(--color-ink);
-  box-shadow: 0 2px 0 0 rgba(35, 39, 31, 0.18);
+  box-shadow: var(--shadow-pad-dark);
 }
 .pad-button--dark:hover {
   background: var(--color-board);
@@ -889,4 +928,88 @@ a {
   color: var(--color-ink-soft);
   max-width: 44ch;
   line-height: 1.6;
+}
+
+/* ------------------------------------------------------------------ *
+ *  The sheet: this whole page is a drawing
+ * ------------------------------------------------------------------ */
+
+.drawing-frame {
+  position: absolute;
+  inset: 9px;
+  border: 1px solid rgba(35, 39, 31, 0.2);
+  pointer-events: none;
+  z-index: 40;
+}
+.drawing-frame span {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid rgba(35, 39, 31, 0.5);
+}
+.drawing-frame span:nth-child(1) { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.drawing-frame span:nth-child(2) { top: -1px; right: -1px; border-left: 0; border-bottom: 0; }
+.drawing-frame span:nth-child(3) { bottom: -1px; left: -1px; border-right: 0; border-top: 0; }
+.drawing-frame span:nth-child(4) { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+@media (max-width: 640px) {
+  .drawing-frame { inset: 5px; }
+}
+
+.sheet-stamp {
+  display: flex;
+  justify-content: flex-end;
+  margin: clamp(28px, 4vw, 44px) 0 clamp(6px, 1.5vw, 14px);
+  padding: 0 clamp(20px, 5vw, 64px);
+}
+.sheet-stamp dl {
+  width: fit-content;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(5.5rem, max-content));
+  border: 1px solid var(--color-ink);
+}
+.sheet-stamp div {
+  padding: 9px 14px;
+  border-right: 1px solid var(--color-ink-line);
+}
+.sheet-stamp div:last-child { border-right: 0; }
+@media (max-width: 620px) {
+  .sheet-stamp dl {
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+  .sheet-stamp div { border-bottom: 1px solid var(--color-ink-line); }
+  .sheet-stamp div:nth-child(2n) { border-right: 0; }
+  .sheet-stamp div:nth-child(n + 3) { border-bottom: 0; }
+}
+.sheet-stamp dt {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.5625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  margin-bottom: 4px;
+}
+.sheet-stamp dd {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Chevron icon (authored — no glyph icons)
+ * ------------------------------------------------------------------ */
+
+.chevron {
+  flex: none;
+  vertical-align: middle;
+}
+.chevron--left { transform: scaleX(-1); }
+.inline-icon-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }

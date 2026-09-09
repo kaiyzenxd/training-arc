@@ -19,7 +19,7 @@ export const supportTicketDeflection: Workflow = {
     { id: "reply", ref: "A1", kind: "tool", label: "Send the reply", lane: -1 },
     { id: "escal", ref: "A2", kind: "tool", label: "Escalate with a summary", lane: 1 },
     { id: "tag", ref: "U3", kind: "tool", label: "Tag & suggest an owner" },
-    { id: "out", ref: "P1", kind: "outcome", label: "Fast answers, honest hand-offs" },
+    { id: "out", ref: "P1", kind: "outcome", label: "Cited answer or a clean hand-off" },
   ],
   edges: [
     { from: "trig", to: "search" },
@@ -59,8 +59,8 @@ export const supportTicketDeflection: Workflow = {
       },
     ],
     result: [
-      "Well-worn questions get an accurate, cited answer within minutes, day or night.",
-      "The tickets that reach a person arrive pre-researched and pre-routed, so the queue that's left moves faster too.",
+      "Common, well-documented questions get an accurate answer with citations — but only when the grader is confident enough to stand behind it, never a guess.",
+      "Everything else is escalated with the drafted answer, its sources, a one-line summary, and a suggested owner attached, so the person picking it up starts from research rather than a raw ticket.",
     ],
   },
 };
