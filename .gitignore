@@ -33,8 +33,19 @@ Thumbs.db
 # --- n8n local data (if you ever copy it in) ---
 .n8n/
 
-# --- impeccable: local-only / regenerable ---
-.impeccable/config.local.json
-.impeccable/review/
-.impeccable/mocks/
-.impeccable/build/
+# --- Agent tooling: installed locally, kept out of git ---
+# Skills/agents live on disk and keep working; they're just not versioned here.
+# Restore skills installed via `npx skills` with:  npx skills install
+.agents/
+.codex/
+.cursor/
+.claude/skills/
+.claude/agents/
+.claude/plugins/
+skills-lock.json
+
+# impeccable working files (design contracts, review captures) — local only
+.impeccable/
+
+# Session scratch / handoff notes
+RESUME.md
