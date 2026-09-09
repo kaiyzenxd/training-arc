@@ -1,17 +1,11 @@
 import Link from "next/link";
-import type { Workflow, RunState, NodeKind } from "@/lib/workflows";
+import type { Workflow, RunState } from "@/lib/workflows";
 import { STATE_LABEL } from "@/lib/workflows";
 import { layoutBoard, type PlacedNode } from "@/lib/board-layout";
+import { BoardReveal } from "@/components/board-reveal";
+import { NodeIcon, ICON_BY_KIND } from "@/components/node-icon";
 
 type Variant = "hero" | "full" | "compact";
-
-const KIND_TAG: Record<NodeKind, string> = {
-  trigger: "Trigger",
-  agent: "Agent",
-  tool: "Tool",
-  logic: "Decision",
-  outcome: "Outcome",
-};
 
 const STATE_COLOR: Record<RunState, string> = {
   passing: "var(--color-pass)",
@@ -19,16 +13,40 @@ const STATE_COLOR: Record<RunState, string> = {
   failed: "var(--color-fail)",
 };
 
+/** greedily wrap a label to at most `maxLines` lines of ~`per` chars */
+function wrapLabel(label: string, per = 18, maxLines = 2): string[] {
+  const words = label.split(/\s+/);
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    if (cur && (cur + " " + w).length > per) {
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = cur ? `${cur} ${w}` : w;
+    }
+  }
+  if (cur) lines.push(cur);
+  if (lines.length <= maxLines) return lines;
+  const kept = lines.slice(0, maxLines);
+  kept[maxLines - 1] = kept[maxLines - 1].replace(/\s*\S*$/, "…");
+  return kept;
+}
+
 function Package({
   n,
   showCallout,
   compact,
+  nameBelow,
   animate,
+  signal,
 }: {
   n: PlacedNode;
   showCallout: boolean;
   compact: boolean;
+  nameBelow: boolean;
   animate: boolean;
+  signal: boolean;
 }) {
   const cx = n.x + n.w / 2;
   const cy = n.y + n.h / 2;
@@ -132,6 +150,17 @@ function Package({
         stroke="var(--color-silk-soft)"
         strokeWidth={1.25}
       />
+      {signal && (
+        <rect
+          x={n.x}
+          y={n.y}
+          width={n.w}
+          height={n.h}
+          rx={isEndpoint ? 3 : 4}
+          className="node-ping"
+          style={{ "--seg": n.col } as React.CSSProperties}
+        />
+      )}
       {n.kind === "agent" && (
         <circle cx={n.x + 9} cy={n.y + 9} r={2.4} fill="var(--color-silk-soft)" />
       )}
@@ -147,17 +176,33 @@ function Package({
         />
       ))}
 
-      <text
+      <NodeIcon
+        name={n.icon ?? ICON_BY_KIND[n.kind]}
         x={cx}
-        y={compact ? cy + 5 : cy - 1}
-        textAnchor="middle"
-        className={compact ? "pkg-ref pkg-ref--lg" : "pkg-ref"}
-      >
-        {n.ref}
-      </text>
-      {!compact && (
-        <text x={cx} y={cy + 12} textAnchor="middle" className="pkg-kind">
-          {KIND_TAG[n.kind]}
+        y={nameBelow || compact ? cy : cy - 3}
+        size={compact ? 16 : nameBelow ? 23 : 21}
+      />
+
+      {nameBelow ? (
+        <>
+          <text
+            x={n.kind === "trigger" ? n.x + 16 : n.x + 6}
+            y={n.y + 12}
+            className="pkg-ref-corner"
+          >
+            {n.ref}
+          </text>
+          <text x={cx} y={n.y + n.h + 13} textAnchor="middle" className="pkg-name">
+            {wrapLabel(n.label).map((line, i) => (
+              <tspan key={i} x={cx} dy={i === 0 ? 0 : "1.15em"}>
+                {line}
+              </tspan>
+            ))}
+          </text>
+        </>
+      ) : compact ? null : (
+        <text x={cx} y={cy + 15} textAnchor="middle" className="pkg-ref">
+          {n.ref}
         </text>
       )}
     </g>
@@ -168,22 +213,38 @@ function BoardSvg({
   workflow,
   variant,
   animate,
+  signal,
 }: {
   workflow: Workflow;
   variant: Variant;
   animate: boolean;
+  signal: boolean;
 }) {
   const compact = variant === "compact";
-  const L = layoutBoard(workflow, { callouts: !compact });
-  const showCallout = !compact;
-  const showPulse = variant === "hero" || variant === "full";
+  const imported = workflow.layout === "n8n";
+  const importedWide = imported && variant === "full";
+  const L = layoutBoard(workflow, { callouts: !compact && !imported });
+  const showCallout = !compact && !imported;
+  const big = variant === "hero" || variant === "full";
   const dim = compact;
+  const runSignal = signal && big && workflow.status !== "failed";
+
+  const maxCol = Math.max(1, ...L.nodes.map((n) => n.col));
+  const sigStep = maxCol > 8 ? 190 : 280;
+  const sigLoop = Math.min(7000, Math.max(4200, maxCol * sigStep + 1900));
 
   return (
     <svg
       viewBox={`0 0 ${L.width} ${L.height}`}
-      className="board-svg"
+      className={importedWide ? "board-svg board-svg--wide" : "board-svg"}
       role="img"
+      style={
+        {
+          "--sig-step": `${sigStep}ms`,
+          "--sig-loop": `${sigLoop}ms`,
+          ...(importedWide ? { width: `${Math.round(L.width * 0.82)}px` } : {}),
+        } as React.CSSProperties
+      }
       aria-label={`${workflow.title}: ${workflow.nodes
         .map((n) => n.label)
         .join(" then ")}`}
@@ -191,6 +252,18 @@ function BoardSvg({
       <g fill="none" strokeLinecap="round" strokeLinejoin="round">
         {L.edges.map((e, i) => {
           const st = e.state;
+          if (e.alt) {
+            return (
+              <path
+                key={i}
+                d={e.d}
+                stroke="var(--color-silk-faint)"
+                strokeWidth={1.25}
+                strokeDasharray="3 4"
+                opacity={0.7}
+              />
+            );
+          }
           return (
             <g key={i}>
               <path
@@ -201,12 +274,12 @@ function BoardSvg({
                 strokeWidth={2}
                 strokeDasharray={st === "retrying" ? "6 5" : undefined}
               />
-              <circle cx={e.bx} cy={e.by} r={3} fill="var(--color-solder)" />
+              <circle cx={e.bx} cy={e.by} r={2.75} fill="var(--color-solder)" />
             </g>
           );
         })}
 
-        {workflow.status === "passing" && !dim && (
+        {workflow.status === "passing" && !dim && !imported && (
           <path
             d={L.spine}
             stroke="var(--color-trace-lit)"
@@ -214,16 +287,24 @@ function BoardSvg({
             opacity={0.9}
           />
         )}
-        {showPulse && workflow.status === "passing" && (
-          <path
-            d={L.spine}
-            stroke="var(--color-pass)"
-            strokeWidth={3}
-            className="trace-pulse"
-            style={{ "--pulse-len": L.spineLen + 60 } as React.CSSProperties}
-          />
-        )}
       </g>
+
+      {/* signal run — a bright pulse travels the graph node-by-node */}
+      {runSignal && (
+        <g className="signal" fill="none" strokeLinecap="round" strokeLinejoin="round">
+          {L.edges
+            .filter((e) => !e.alt)
+            .map((e, i) => (
+              <path
+                key={i}
+                d={e.d}
+                pathLength={1}
+                className="signal-edge"
+                style={{ "--seg": e.fromCol } as React.CSSProperties}
+              />
+            ))}
+        </g>
+      )}
 
       {L.nodes.map((n) => (
         <Package
@@ -231,7 +312,9 @@ function BoardSvg({
           n={n}
           showCallout={showCallout}
           compact={compact}
+          nameBelow={importedWide}
           animate={animate}
+          signal={runSignal}
         />
       ))}
     </svg>
@@ -271,10 +354,17 @@ function TitleBlock({
   variant: Variant;
   featured: boolean;
 }) {
+  const hero = variant === "hero";
   return (
     <div className="title-block">
       {featured && <span className="tb-flag">Featured</span>}
-      <div className="tb-name stamp">{workflow.title}</div>
+      {hero ? (
+        <Link href={`/work/${workflow.slug}`} className="tb-name tb-name--link stamp">
+          {workflow.title}
+        </Link>
+      ) : (
+        <div className="tb-name stamp">{workflow.title}</div>
+      )}
       <dl className="tb-fields">
         <div>
           <dt className="field-key">Trigger</dt>
@@ -301,7 +391,12 @@ function TitleBlock({
         </p>
       )}
 
-      {(variant === "hero" || variant === "full") && (
+      {hero && (
+        <Link href={`/work/${workflow.slug}`} className="pad-button">
+          Open the case study
+        </Link>
+      )}
+      {variant === "full" && (
         <a
           href="mailto:markryanbaricuatro@gmail.com?subject=Start%20a%20project"
           className="pad-button"
@@ -332,11 +427,13 @@ export function Board({
   variant = "hero",
   animate = false,
   featured = false,
+  reveal = false,
 }: {
   workflow: Workflow;
   variant?: Variant;
   animate?: boolean;
   featured?: boolean;
+  reveal?: boolean;
 }) {
   const withNotes = variant === "hero" || variant === "full";
   const inner = (
@@ -346,7 +443,12 @@ export function Board({
         {withNotes && <NotesBlock workflow={workflow} />}
       </div>
       <div className="board-scroll">
-        <BoardSvg workflow={workflow} variant={variant} animate={animate} />
+        <BoardSvg
+          workflow={workflow}
+          variant={variant}
+          animate={animate}
+          signal={reveal}
+        />
       </div>
       {variant !== "compact" ? (
         <Legend status={workflow.status} />
@@ -367,5 +469,5 @@ export function Board({
       </Link>
     );
   }
-  return inner;
+  return reveal ? <BoardReveal>{inner}</BoardReveal> : inner;
 }

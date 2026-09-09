@@ -19,8 +19,12 @@ export interface BoardNode {
   label: string;
   /** optional second callout line */
   label2?: string;
-  /** lane offset: 0 = main line, -1 = branch up, 1 = branch down */
+  /** lane offset: 0 = main line, -1 = branch up, 1 = branch down (auto layout) */
   lane?: number;
+  /** real canvas position [x, y] — set by the n8n importer (layout: "n8n") */
+  pos?: [number, number];
+  /** silkscreen glyph name (see components/node-icon) */
+  icon?: string;
 }
 
 export interface BoardEdge {
@@ -28,6 +32,8 @@ export interface BoardEdge {
   to: string;
   /** overrides the board's overall state for this segment */
   state?: RunState;
+  /** true = an else / false / fault branch — drawn secondary */
+  alt?: boolean;
 }
 
 export interface DecisionNote {
@@ -60,17 +66,29 @@ export interface Workflow {
   summary: string;
   /** true = illustrative sample, not a shipped client build */
   synthetic: boolean;
+  /** "auto" = computed left-to-right; "n8n" = real canvas positions */
+  layout?: "auto" | "n8n";
+  /** demo video (Loom share URL) */
+  video?: string;
+  /** path under /public to the sanitised workflow export */
+  download?: string;
+  /** slugs of related workflows */
+  related?: string[];
   nodes: BoardNode[];
   edges: BoardEdge[];
   prose: Prose;
 }
 
+import { kbQuery } from "@/content/workflows/kb-query";
+import { kbIngestion } from "@/content/workflows/kb-ingestion";
 import { inboundLeadTriage } from "@/content/workflows/inbound-lead-triage";
 import { invoiceInboxReconciliation } from "@/content/workflows/invoice-inbox-reconciliation";
 import { supportTicketDeflection } from "@/content/workflows/support-ticket-deflection";
 
 /** Ordered — the first entry is featured on the home board. */
 export const workflows: Workflow[] = [
+  kbQuery,
+  kbIngestion,
   inboundLeadTriage,
   invoiceInboxReconciliation,
   supportTicketDeflection,

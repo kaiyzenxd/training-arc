@@ -1,0 +1,748 @@
+{
+  "name": "KB Query",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## KB Query (v2.0 — native Slack Trigger)\nReceives Slack events natively (app_mention + message, whole workspace) from a dedicated KB Slack app. Filters out the bot's own messages → extracts search keywords via Claude → searches Airtable KnowledgeBase → synthesizes answer with source citations → replies in Slack.\n\n**Before activating:** create a separate Slack app, grab the webhook URL from the Slack Trigger node panel (not a static path), set the Signing Secret on the credential, and select your own Slack / Anthropic / Airtable credentials. See meta.notes.",
+        "height": 200,
+        "width": 700
+      },
+      "id": "note-001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "trigger": [
+          "app_mention"
+        ],
+        "channelId": {
+          "__rl": true,
+          "value": "C000000000",
+          "mode": "list",
+          "cachedResultName": "your-channel"
+        },
+        "options": {}
+      },
+      "id": "trig-001",
+      "name": "Receive KB Query [AUTO]",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        320
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_YOUR_SLACK_CREDENTIAL_ID",
+          "name": "KB Query Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-notbot",
+              "leftValue": "={{ !$json.bot_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-001",
+      "name": "Check Not Bot Message [AUTO]",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "asg-userid",
+              "name": "userId",
+              "value": "={{ $json.user }}",
+              "type": "string"
+            },
+            {
+              "id": "asg-channelid",
+              "name": "channelId",
+              "value": "={{ $json.channel }}",
+              "type": "string"
+            },
+            {
+              "id": "asg-question",
+              "name": "question",
+              "value": "={{ $json.text.replace(/<@[^>]+>/g, '').trim() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-002",
+      "name": "Extract Query Data [AUTO]",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-qnotempty",
+              "leftValue": "={{ $json.question }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-qlength",
+              "leftValue": "={{ $json.question.length }}",
+              "rightValue": 2000,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-003",
+      "name": "Validate Input [AUTO]",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const WINDOW_MS = 60 * 1000;\nconst MAX_REQUESTS = 20;\nconst identifier = $input.first().json.userId || 'unknown';\nconst now = Date.now();\nif (!global.rateLimitStore) global.rateLimitStore = {};\nconst record = global.rateLimitStore[identifier] || { count: 0, windowStart: now };\nif (now - record.windowStart > WINDOW_MS) { record.count = 1; record.windowStart = now; }\nelse { record.count += 1; }\nglobal.rateLimitStore[identifier] = record;\nreturn [{ json: { ...($input.first().json), _rateLimitAllowed: record.count <= MAX_REQUESTS } }];"
+      },
+      "id": "code-001",
+      "name": "Check Rate Limit [AUTO]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-ratelimit",
+              "leftValue": "={{ $json._rateLimitAllowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-004",
+      "name": "Rate Limit Gate [AUTO]",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1440,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 150, messages: [{ role: 'user', content: 'Extract 3-5 specific search terms from this question. Return ONLY a JSON array with no explanation or markdown.\\nExample: [\"onboarding\", \"new hire\", \"first day\"]\\n\\nQuestion: ' + $json.question }] }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "http-001",
+      "name": "Extract Search Keywords [AUTO]",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        320
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const queryData = $('Extract Query Data [AUTO]').first().json;\nconst response = $input.first().json;\n\nlet keywords = [];\ntry {\n  const rawText = (response.content?.[0]?.text || '[]').trim();\n  const jsonText = rawText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  keywords = JSON.parse(jsonText);\n  if (!Array.isArray(keywords)) keywords = [];\n} catch(e) {\n  keywords = [];\n}\n\n// Build Airtable filterByFormula\nlet formula;\nif (keywords.length > 0) {\n  const conditions = keywords.map(k => `FIND(\"${k.toLowerCase().replace(/\"/g, '')}\", LOWER({Keywords}))`);\n  formula = conditions.length === 1 ? conditions[0] : `OR(${conditions.join(', ')})`;\n} else {\n  formula = '{Keywords}!=\"\"';\n}\n\nreturn [{ json: {\n  channelId: queryData.channelId,\n  userId: queryData.userId,\n  question: queryData.question,\n  keywords,\n  formula\n}}];"
+      },
+      "id": "code-002",
+      "name": "Parse Keywords [AUTO]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "id",
+          "value": "appXXXXXXXXXXXXXX"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "name",
+          "value": "KnowledgeBase"
+        },
+        "filterByFormula": "={{ $json.formula }}",
+        "returnAll": false,
+        "limit": 5,
+        "options": {}
+      },
+      "id": "air-001",
+      "name": "Search KB Airtable [AUTO]",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2160,
+        320
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const queryData = $('Parse Keywords [AUTO]').first().json;\nlet records = [];\ntry {\n  records = $('Search KB Airtable [AUTO]').all().filter(r => r.json && r.json.fields);\n} catch(e) {}\n\nconst hasResults = records.length > 0;\n\nreturn [{ json: {\n  channelId: queryData.channelId,\n  userId: queryData.userId,\n  question: queryData.question,\n  hasResults,\n  records: records.map(r => r.json)\n}}];"
+      },
+      "id": "code-003",
+      "name": "Check Results Found [AUTO]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-hasresults",
+              "leftValue": "={{ $json.hasResults }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-005",
+      "name": "Route on Results [AUTO]",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst records = data.records.slice(0, 3);\n\nconst contextParts = records.map(r => {\n  const f = r.fields || {};\n  const content = (f.Content || '').substring(0, 2000);\n  return `**${f.Title || 'Untitled'}** (${f.DocType || 'doc'})\\nSummary: ${f.Summary || 'N/A'}\\nContent excerpt:\\n${content}`;\n});\n\nconst contextBlock = contextParts.join('\\n\\n---\\n\\n');\n\nconst systemPrompt = 'You are a helpful knowledge base assistant replying directly in Slack. Answer using ONLY the provided documents, and mention the source document title naturally in a sentence, not as a heading.\\n\\nFormat strictly for Slack mrkdwn, which is NOT standard Markdown:\\n- Use *single asterisks* for bold, never **double asterisks**\\n- Never use headers (#, ##, ###) - Slack shows them as literal characters\\n- Never use horizontal rules (---) - use a blank line between sections instead\\n- Use a plain \"-\" for bullets, no sub-headers per item\\n- Keep it tight: one short intro line, a short bulleted list only if needed, and at most one closing line. Do not restate the question or add excessive caveats.\\n\\nIf the answer is not in the documents, say so in one plain sentence.';\n\nconst userContent = `Documents:\\n${contextBlock}\\n\\nUser\\'s question: ${data.question}`;\n\nconst requestBody = {\n  model: 'claude-sonnet-4-6',\n  max_tokens: 1024,\n  system: systemPrompt,\n  messages: [{ role: 'user', content: userContent }]\n};\n\nreturn [{ json: {\n  channelId: data.channelId,\n  question: data.question,\n  requestBody: JSON.stringify(requestBody),\n  hasResults: true\n}}];"
+      },
+      "id": "code-004",
+      "name": "Build Context [AUTO]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "asg-nr-channel",
+              "name": "channelId",
+              "value": "={{ $json.channelId }}",
+              "type": "string"
+            },
+            {
+              "id": "asg-nr-reply",
+              "name": "replyText",
+              "value": "I couldn't find anything in the knowledge base for that question. Try rephrasing or using different keywords.",
+              "type": "string"
+            },
+            {
+              "id": "asg-nr-hasresults",
+              "name": "hasResults",
+              "value": false,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-003",
+      "name": "Set No Results Message [AUTO]",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2880,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-002",
+      "name": "Synthesize Answer [AUTO]",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        176
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const contextData = $('Build Context [AUTO]').first().json;\nconst response = $input.first().json;\nconst replyText = (response.content?.[0]?.text || 'Sorry, I could not generate a response.').trim();\nreturn [{ json: {\n  channelId: contextData.channelId,\n  replyText\n}}];"
+      },
+      "id": "code-005",
+      "name": "Parse Claude Answer [AUTO]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channelId }}"
+        },
+        "text": "={{ $json.replyText }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "slack-001",
+      "name": "Send Reply to Slack [AUTO]",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        3600,
+        320
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_YOUR_SLACK_CREDENTIAL_ID",
+          "name": "KB Query Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-oktrue",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-006",
+      "name": "Validate Output [AUTO]",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3840,
+        320
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "err-001",
+      "name": "On Query Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        224,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "asg-errmsg",
+              "name": "errorMessage",
+              "value": "={{ $json.execution?.error?.message || $json.error?.message || 'Unknown error' }}",
+              "type": "string"
+            },
+            {
+              "id": "asg-errnode",
+              "name": "errorNode",
+              "value": "={{ $json.execution?.lastNodeExecuted || 'Unknown node' }}",
+              "type": "string"
+            },
+            {
+              "id": "asg-errts",
+              "name": "errorTimestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "asg-errwf",
+              "name": "workflowName",
+              "value": "KB Query",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "err-002",
+      "name": "Log Query Error [AUTO]",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C000000000",
+          "mode": "list",
+          "cachedResultName": "your-channel"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ JSON.stringify([{ \"type\": \"header\", \"text\": { \"type\": \"plain_text\", \"text\": \"\\u26a0\\ufe0f KB Query Error\" } }, { \"type\": \"section\", \"text\": { \"type\": \"mrkdwn\", \"text\": `*Workflow:* ${$json.workflowName}\\n*Failed Node:* ${$json.errorNode}\\n*Error:* ${$json.errorMessage}\\n*Time:* ${$json.errorTimestamp}` } }, { \"type\": \"divider\" }]) }}",
+        "text": "={{ '\\u26a0\\ufe0f KB Query Error: ' + $json.errorMessage }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "id": "err-003",
+      "name": "Send Query Error Alert [AUTO]",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        704,
+        592
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_YOUR_SLACK_CREDENTIAL_ID",
+          "name": "KB Query Slack API"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive KB Query [AUTO]": {
+      "main": [
+        [
+          { "node": "Check Not Bot Message [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Check Not Bot Message [AUTO]": {
+      "main": [
+        [
+          { "node": "Extract Query Data [AUTO]", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Extract Query Data [AUTO]": {
+      "main": [
+        [
+          { "node": "Validate Input [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validate Input [AUTO]": {
+      "main": [
+        [
+          { "node": "Check Rate Limit [AUTO]", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Check Rate Limit [AUTO]": {
+      "main": [
+        [
+          { "node": "Rate Limit Gate [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Rate Limit Gate [AUTO]": {
+      "main": [
+        [
+          { "node": "Extract Search Keywords [AUTO]", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Extract Search Keywords [AUTO]": {
+      "main": [
+        [
+          { "node": "Parse Keywords [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse Keywords [AUTO]": {
+      "main": [
+        [
+          { "node": "Search KB Airtable [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Search KB Airtable [AUTO]": {
+      "main": [
+        [
+          { "node": "Check Results Found [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Check Results Found [AUTO]": {
+      "main": [
+        [
+          { "node": "Route on Results [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Route on Results [AUTO]": {
+      "main": [
+        [
+          { "node": "Build Context [AUTO]", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Set No Results Message [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Build Context [AUTO]": {
+      "main": [
+        [
+          { "node": "Synthesize Answer [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Synthesize Answer [AUTO]": {
+      "main": [
+        [
+          { "node": "Parse Claude Answer [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Parse Claude Answer [AUTO]": {
+      "main": [
+        [
+          { "node": "Send Reply to Slack [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Set No Results Message [AUTO]": {
+      "main": [
+        [
+          { "node": "Send Reply to Slack [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Reply to Slack [AUTO]": {
+      "main": [
+        [
+          { "node": "Validate Output [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Validate Output [AUTO]": {
+      "main": [
+        [],
+        [
+          { "node": "Log Query Error [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "On Query Error": {
+      "main": [
+        [
+          { "node": "Log Query Error [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Log Query Error [AUTO]": {
+      "main": [
+        [
+          { "node": "Send Query Error Alert [AUTO]", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "notes": "Sanitised for publication. Replace REPLACE_WITH_YOUR_* credential ids, the Slack channel (C000000000), and the Airtable base id (appXXXXXXXXXXXXXX) with your own before use. Webhook ids and the source instance id have been stripped; n8n regenerates webhook ids on import."
+  },
+  "tags": []
+}

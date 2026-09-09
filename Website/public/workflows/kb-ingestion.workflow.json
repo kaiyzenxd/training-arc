@@ -1,0 +1,534 @@
+{
+  "name": "KB Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## KB Ingestion\nWatches a Google Drive folder for Google Docs. Exports the text, generates a summary / keywords / doc-type via Claude, upserts into the Airtable KnowledgeBase, and notifies Slack.\n\n**Before activating:** create the Airtable KnowledgeBase table and set your base id (appXXXXXXXXXXXXXX), create a Google Drive OAuth2 credential and set the folder id, and select your own Anthropic / Slack credentials. See meta.notes.",
+        "height": 180,
+        "width": 700
+      },
+      "id": "note-001",
+      "name": "Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_YOUR_DRIVE_FOLDER_ID"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "id": "trigger-001",
+      "name": "Watch KB Folder Created [AUTO]",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        384
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_GDRIVE_CREDENTIAL_ID",
+          "name": "KB Ingestion Google Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-filetype",
+              "leftValue": "={{ $json.mimeType }}",
+              "rightValue": "application/vnd.google-apps.document",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-001",
+      "name": "Check File Type [AUTO]",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "asg-fileid", "name": "fileId", "value": "={{ $json.id }}", "type": "string" },
+            { "id": "asg-filename", "name": "fileName", "value": "={{ $json.name }}", "type": "string" },
+            { "id": "asg-mimetype", "name": "mimeType", "value": "={{ $json.mimeType }}", "type": "string" },
+            { "id": "asg-driveurl", "name": "driveUrl", "value": "={{ $json.webViewLink || '' }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-001",
+      "name": "Extract File Metadata [AUTO]",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        752,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.googleapis.com/drive/v3/files/{{ $json.fileId }}/export",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "mimeType", "value": "text/plain" }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "gd-001",
+      "name": "Download File Content [AUTO]",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        992,
+        304
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_GDRIVE_CREDENTIAL_ID",
+          "name": "KB Ingestion Google Drive"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const metaNode = $('Extract File Metadata [AUTO]').first().json;\nconst item = $input.first();\n\nlet text = (item.json.data || item.json.body || '').toString();\n\ntext = text.replace(/\\r\\n/g, '\\n').replace(/\\n\\n\\n+/g, '\\n\\n').trim();\nif (text.length > 15000) { text = text.substring(0, 15000) + '... [truncated]'; }\n\nreturn [{ json: {\n  fileId: metaNode.fileId,\n  fileName: metaNode.fileName,\n  mimeType: metaNode.mimeType,\n  driveUrl: metaNode.driveUrl,\n  text\n}}];\n"
+      },
+      "id": "code-001",
+      "name": "Extract and Clean Text [AUTO]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-hascontent",
+              "leftValue": "={{ $json.text.length }}",
+              "rightValue": 50,
+              "operator": { "type": "number", "operation": "gt" }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-002",
+      "name": "Check Has Content [AUTO]",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1472,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": { "__rl": true, "mode": "id", "value": "appXXXXXXXXXXXXXX" },
+        "table": { "__rl": true, "mode": "name", "value": "KnowledgeBase" },
+        "filterByFormula": "={{ '{DocId}=\"' + $json.fileId + '\"' }}",
+        "options": {}
+      },
+      "id": "air-001",
+      "name": "Search Existing Record [AUTO]",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1712,
+        304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const textData = $('Extract and Clean Text [AUTO]').first().json;\n\nlet airtableRecordId = null;\ntry {\n  const records = $('Search Existing Record [AUTO]').all();\n  if (records.length > 0 && records[0].json && records[0].json.id) {\n    airtableRecordId = records[0].json.id;\n  }\n} catch(e) {}\n\nconst prompt = `You are a document indexer. Given the following document text, return ONLY valid JSON with no markdown fences or explanation:\n\n{\n  \"summary\": \"<2-3 sentence summary of what this document covers>\",\n  \"keywords\": [\"<term1>\", \"<term2>\", \"<term3>\"],\n  \"docType\": \"<sop|product_doc|faq|other>\"\n}\n\nInclude 8-12 keywords that a user might search for to find this document.\n\nDocument title: ${textData.fileName}\nDocument text:\n${textData.text.substring(0, 10000)}`;\n\nconst requestBody = {\n  model: 'claude-sonnet-4-6',\n  max_tokens: 512,\n  messages: [{ role: 'user', content: prompt }]\n};\n\nreturn [{ json: {\n  fileId: textData.fileId,\n  fileName: textData.fileName,\n  driveUrl: textData.driveUrl,\n  text: textData.text,\n  requestBody: JSON.stringify(requestBody),\n  airtableRecordId\n}}];"
+      },
+      "id": "code-002",
+      "name": "Build Claude Request [AUTO]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.requestBody }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "http-001",
+      "name": "Generate Summary and Keywords [AUTO]",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2192,
+        304
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const reqData = $('Build Claude Request [AUTO]').first().json;\nconst response = $input.first().json;\n\nlet parsed = { summary: '', keywords: [], docType: 'other' };\ntry {\n  const rawText = (response.content?.[0]?.text || '{}').trim();\n  const jsonText = rawText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  parsed = JSON.parse(jsonText);\n} catch(e) {}\n\nconst validDocTypes = ['sop', 'product_doc', 'faq', 'other'];\nconst docType = validDocTypes.includes(parsed.docType) ? parsed.docType : 'other';\nconst keywords = Array.isArray(parsed.keywords) ? parsed.keywords.join(', ') : '';\nconst summary = (parsed.summary || '').trim();\n\nconst blocksJson = JSON.stringify({ blocks: [\n  { type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: *Document Ingested*' } },\n  { type: 'section', fields: [\n    { type: 'mrkdwn', text: '*Title*\\n<' + (reqData.driveUrl || 'https://drive.google.com') + '|' + reqData.fileName + '>' },\n    { type: 'mrkdwn', text: '*Type*\\n`' + docType + '`' }\n  ]},\n  { type: 'section', text: { type: 'mrkdwn', text: '*Summary*\\n' + summary } },\n  { type: 'divider' }\n] });\n\nreturn [{ json: {\n  fileId: reqData.fileId,\n  fileName: reqData.fileName,\n  driveUrl: reqData.driveUrl,\n  text: reqData.text,\n  summary,\n  keywords,\n  docType,\n  ingestedAt: new Date().toISOString(),\n  airtableRecordId: reqData.airtableRecordId,\n  blocksJson\n}}];"
+      },
+      "id": "code-003",
+      "name": "Parse and Build Record [AUTO]",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-recordexists",
+              "leftValue": "={{ $json.airtableRecordId }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-003",
+      "name": "Check Record Exists [AUTO]",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2672,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": { "__rl": true, "mode": "id", "value": "appXXXXXXXXXXXXXX" },
+        "table": { "__rl": true, "mode": "name", "value": "KnowledgeBase" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": ["id"],
+          "value": {
+            "id": "={{ $json.airtableRecordId }}",
+            "Title": "={{ $json.fileName }}",
+            "Summary": "={{ $json.summary }}",
+            "Keywords": "={{ $json.keywords }}",
+            "Content": "={{ $json.text }}",
+            "DocType": "={{ $json.docType }}",
+            "DriveUrl": "={{ $json.driveUrl }}",
+            "IngestedAt": "={{ $json.ingestedAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "air-002",
+      "name": "Update KB Record [AUTO]",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2912,
+        192
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": { "__rl": true, "mode": "id", "value": "appXXXXXXXXXXXXXX" },
+        "table": { "__rl": true, "mode": "name", "value": "KnowledgeBase" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "value": {
+            "DocId": "={{ $json.fileId }}",
+            "Title": "={{ $json.fileName }}",
+            "Summary": "={{ $json.summary }}",
+            "Keywords": "={{ $json.keywords }}",
+            "Content": "={{ $json.text }}",
+            "DocType": "={{ $json.docType }}",
+            "DriveUrl": "={{ $json.driveUrl }}",
+            "IngestedAt": "={{ $json.ingestedAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "air-003",
+      "name": "Create KB Record [AUTO]",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        2912,
+        432
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_WITH_YOUR_AIRTABLE_CREDENTIAL_ID",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "merge-001",
+      "name": "Merge Save Result",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        3184,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": { "__rl": true, "value": "C000000000", "mode": "id" },
+        "messageType": "block",
+        "blocksUi": "={{ $('Parse and Build Record [AUTO]').first().json.blocksJson }}",
+        "text": "={{ 'Document ingested: ' + $('Parse and Build Record [AUTO]').first().json.fileName }}",
+        "otherOptions": { "includeLinkToWorkflow": false }
+      },
+      "id": "slack-001",
+      "name": "Send Ingestion Alert [AUTO]",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        3392,
+        304
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_YOUR_SLACK_CREDENTIAL_ID",
+          "name": "KB Ingestion Slack"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "err-001",
+      "name": "On Ingestion Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "asg-errmsg", "name": "errorMessage", "value": "={{ $json.execution?.error?.message }}", "type": "string" },
+            { "id": "asg-errnode", "name": "errorNode", "value": "={{ $json.execution?.lastNodeExecuted }}", "type": "string" },
+            { "id": "asg-errts", "name": "errorTimestamp", "value": "={{ $now.toISO() }}", "type": "string" },
+            { "id": "asg-wfname", "name": "workflowName", "value": "KB Ingestion", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "err-002",
+      "name": "Log Ingestion Error [AUTO]",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": { "__rl": true, "value": "C000000000", "mode": "id" },
+        "text": "={{ ':warning: *KB Ingestion Error*\\n*Workflow:* ' + $json.workflowName + '\\n*Node:* ' + $json.errorNode + '\\n*Error:* ' + $json.errorMessage + '\\n*Time:* ' + $json.errorTimestamp }}",
+        "otherOptions": { "includeLinkToWorkflow": false }
+      },
+      "id": "err-003",
+      "name": "Send Ingestion Error Alert [AUTO]",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        720,
+        672
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_YOUR_SLACK_CREDENTIAL_ID",
+          "name": "KB Ingestion Slack"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Watch KB Folder Created [AUTO]": {
+      "main": [[{ "node": "Check File Type [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Check File Type [AUTO]": {
+      "main": [
+        [{ "node": "Extract File Metadata [AUTO]", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Extract File Metadata [AUTO]": {
+      "main": [[{ "node": "Download File Content [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Download File Content [AUTO]": {
+      "main": [[{ "node": "Extract and Clean Text [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Extract and Clean Text [AUTO]": {
+      "main": [[{ "node": "Check Has Content [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Check Has Content [AUTO]": {
+      "main": [
+        [{ "node": "Search Existing Record [AUTO]", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Search Existing Record [AUTO]": {
+      "main": [[{ "node": "Build Claude Request [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Build Claude Request [AUTO]": {
+      "main": [[{ "node": "Generate Summary and Keywords [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Generate Summary and Keywords [AUTO]": {
+      "main": [[{ "node": "Parse and Build Record [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Parse and Build Record [AUTO]": {
+      "main": [[{ "node": "Check Record Exists [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Check Record Exists [AUTO]": {
+      "main": [
+        [{ "node": "Update KB Record [AUTO]", "type": "main", "index": 0 }],
+        [{ "node": "Create KB Record [AUTO]", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update KB Record [AUTO]": {
+      "main": [[{ "node": "Merge Save Result", "type": "main", "index": 0 }]]
+    },
+    "Create KB Record [AUTO]": {
+      "main": [[{ "node": "Merge Save Result", "type": "main", "index": 1 }]]
+    },
+    "Merge Save Result": {
+      "main": [[{ "node": "Send Ingestion Alert [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "On Ingestion Error": {
+      "main": [[{ "node": "Log Ingestion Error [AUTO]", "type": "main", "index": 0 }]]
+    },
+    "Log Ingestion Error [AUTO]": {
+      "main": [[{ "node": "Send Ingestion Error Alert [AUTO]", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveExecutionProgress": true,
+    "timezone": "UTC",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {
+    "notes": "Sanitised for publication. Replace REPLACE_WITH_YOUR_* credential ids, the Drive folder id, the Slack channel (C000000000), and the Airtable base id (appXXXXXXXXXXXXXX) with your own before use. Webhook ids and the source instance id have been stripped. Pairs with the KB Query workflow, which reads from the same Airtable KnowledgeBase table."
+  },
+  "tags": []
+}

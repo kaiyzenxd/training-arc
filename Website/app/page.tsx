@@ -15,7 +15,7 @@ export default function Home() {
       </h1>
 
       <section className="featured" aria-label="Featured workflow">
-        <Board workflow={featured} variant="hero" featured />
+        <Board workflow={featured} variant="hero" featured reveal />
       </section>
 
       <section className="more" aria-label="More workflows">

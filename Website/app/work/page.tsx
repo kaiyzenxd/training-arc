@@ -14,10 +14,10 @@ export default function WorkIndex() {
       <section className="intro">
         <h1 className="intro-title stamp">Work</h1>
         <p className="intro-body prose-measure">
-          Each workflow below is a real automation pattern drawn as a board you
-          could hand to a fab house: the trigger, the model&rsquo;s reasoning
-          steps, the tool calls it makes, and the paths it takes when something
-          goes wrong.
+          Each workflow is drawn as a board &mdash; the trigger, the steps, the
+          tool calls, and the paths it takes when something fails. The
+          knowledge-base pair is real and downloadable; the rest are labelled
+          samples.
         </p>
       </section>
 
