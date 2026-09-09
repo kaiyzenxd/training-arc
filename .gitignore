@@ -1,0 +1,33 @@
+# --- Secrets: never commit these ---
+.env
+.env.*
+!.env.example
+*.key
+.mcp.json
+secrets/
+
+# --- Node / Next.js (auto-generated, huge) ---
+node_modules/
+.next/
+out/
+build/
+dist/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# --- n8n local data (if you ever copy it in) ---
+.n8n/
